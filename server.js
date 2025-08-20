@@ -69,20 +69,7 @@ app.post('/api/create-payment', async (req, res) => {
 app.post('/api/payment-callback', async (req, res) => {
   try {
     console.log('=== CALLBACK FEDAPAY REÇU À', new Date().toISOString(), '===');
-    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('📄 Body:', JSON.stringify(req.body, null, 2));
-    console.log('=== FIN CALLBACK ===');
-    
-    // Test de connexion Firestore
-    try {
-      const testRef = await db.collection('test').add({
-        timestamp: new Date(),
-        message: 'Test connexion Firestore'
-      });
-      console.log('✅ Test Firestore réussi, ID:', testRef.id);
-    } catch (firestoreError) {
-      console.error('❌ Erreur de connexion Firestore:', firestoreError);
-    }
+    console.log('📋 Body:', JSON.stringify(req.body, null, 2));
     
     const { transaction } = req.body;
     
@@ -94,84 +81,33 @@ app.post('/api/payment-callback', async (req, res) => {
     console.log('📊 Statut de la transaction:', transaction.status);
     
     if (transaction.status === 'approved') {
-      console.log('✅ Transaction approuvée, traitement...');
+      console.log('✅ Transaction approuvée, mise à jour de l\'article...');
       
-      // FedaPay peut renvoyer les métadonnées différemment
-      const metadata = transaction.metadata || transaction.custom_metadata || {};
-      const { userId, articleId } = metadata;
+      // Récupérer l'ID de l'article depuis la référence
+      const articleId = transaction.reference;
       
-      console.log('📝 Métadonnées extraites:', { userId, articleId });
-      
-      if (!userId || !articleId) {
-        console.error('❌ userId ou articleId manquant');
-        console.error('Métadonnées complètes:', metadata);
-        return res.status(400).send('Métadonnées incomplètes');
+      if (!articleId) {
+        console.error('❌ articleId manquant dans la référence');
+        return res.status(400).send('Article ID manquant');
       }
       
-      const validPayData = {
-        userId: userId,
-        articleId: articleId,
-        transactionId: transaction.id,
-        amount: transaction.amount / 100,
-        currency: 'XOF',
-        paymentDate: new Date(),
-        paymentMethod: transaction.mode || 'fedapay',
-        status: 'approved',
-        customerEmail: transaction.customer?.email || '',
-        customerName: `${transaction.customer?.firstname || ''} ${transaction.customer?.lastname || ''}`.trim(),
-        reference: transaction.reference,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      console.log('💾 Données ValidPay à créer:', validPayData);
-      
       try {
-        const validPayRef = await db.collection('ValidPay').add(validPayData);
-        console.log(`✅ Document ValidPay créé avec ID: ${validPayRef.id}`);
-        
+        // Mettre à jour le statut de paiement de l'article
         await db.collection('news').doc(articleId).update({
           paymentStatus: 'paid',
           paymentId: transaction.id,
           paymentDate: new Date(),
           paymentAmount: transaction.amount / 100,
-          paymentMethod: transaction.mode || 'fedapay',
-          validPayId: validPayRef.id
+          paymentMethod: transaction.mode || 'fedapay'
         });
         
-        console.log(`✅ Article ${articleId} mis à jour`);
-        
-        // Log de succès
-        await db.collection('callback_logs').add({
-          timestamp: new Date(),
-          transactionId: transaction.id,
-          status: 'success',
-          message: 'Callback traité avec succès'
-        });
-        
+        console.log(`✅ Article ${articleId} marqué comme payé`);
       } catch (firestoreError) {
         console.error('❌ Erreur Firestore:', firestoreError);
-        
-        // Log d'erreur
-        await db.collection('callback_logs').add({
-          timestamp: new Date(),
-          transactionId: transaction.id,
-          status: 'error',
-          message: firestoreError.message
-        });
-        
         return res.status(500).send('Erreur Firestore');
       }
     } else {
       console.log('⚠️ Transaction non approuvée, statut:', transaction.status);
-      
-      // Log de statut non approuvé
-      await db.collection('callback_logs').add({
-        timestamp: new Date(),
-        transactionId: transaction.id,
-        status: transaction.status,
-        message: 'Transaction non approuvée'
-      });
     }
     
     res.status(200).send('OK');
@@ -191,6 +127,7 @@ app.post('/api/payment-callback', async (req, res) => {
           `${transaction.customer?.firstname} ${transaction.customer?.lastname}`,
           articleTitle
         );
+
 
 
 });
