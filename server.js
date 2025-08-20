@@ -68,10 +68,21 @@ app.post('/api/create-payment', async (req, res) => {
 // Route de callback pour FedaPay
 app.post('/api/payment-callback', async (req, res) => {
   try {
-    console.log('=== CALLBACK FEDAPAY REÇU ===');
-    console.log('Headers:', req.headers);
-    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('=== CALLBACK FEDAPAY REÇU À', new Date().toISOString(), '===');
+    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('📄 Body:', JSON.stringify(req.body, null, 2));
     console.log('=== FIN CALLBACK ===');
+    
+    // Test de connexion Firestore
+    try {
+      const testRef = await db.collection('test').add({
+        timestamp: new Date(),
+        message: 'Test connexion Firestore'
+      });
+      console.log('✅ Test Firestore réussi, ID:', testRef.id);
+    } catch (firestoreError) {
+      console.error('❌ Erreur de connexion Firestore:', firestoreError);
+    }
     
     const { transaction } = req.body;
     
@@ -85,8 +96,8 @@ app.post('/api/payment-callback', async (req, res) => {
     if (transaction.status === 'approved') {
       console.log('✅ Transaction approuvée, traitement...');
       
-      // Récupérer les métadonnées
-      const metadata = transaction.metadata || {};
+      // FedaPay peut renvoyer les métadonnées différemment
+      const metadata = transaction.metadata || transaction.custom_metadata || {};
       const { userId, articleId } = metadata;
       
       console.log('📝 Métadonnées extraites:', { userId, articleId });
@@ -97,12 +108,11 @@ app.post('/api/payment-callback', async (req, res) => {
         return res.status(400).send('Métadonnées incomplètes');
       }
       
-      // Créer le document ValidPay
       const validPayData = {
         userId: userId,
         articleId: articleId,
         transactionId: transaction.id,
-        amount: transaction.amount,
+        amount: transaction.amount / 100,
         currency: 'XOF',
         paymentDate: new Date(),
         paymentMethod: transaction.mode || 'fedapay',
@@ -117,27 +127,51 @@ app.post('/api/payment-callback', async (req, res) => {
       console.log('💾 Données ValidPay à créer:', validPayData);
       
       try {
-        // Création du document
         const validPayRef = await db.collection('ValidPay').add(validPayData);
         console.log(`✅ Document ValidPay créé avec ID: ${validPayRef.id}`);
         
-        // Mise à jour de l'article
         await db.collection('news').doc(articleId).update({
           paymentStatus: 'paid',
           paymentId: transaction.id,
           paymentDate: new Date(),
-          paymentAmount: transaction.amount,
+          paymentAmount: transaction.amount / 100,
           paymentMethod: transaction.mode || 'fedapay',
           validPayId: validPayRef.id
         });
         
         console.log(`✅ Article ${articleId} mis à jour`);
+        
+        // Log de succès
+        await db.collection('callback_logs').add({
+          timestamp: new Date(),
+          transactionId: transaction.id,
+          status: 'success',
+          message: 'Callback traité avec succès'
+        });
+        
       } catch (firestoreError) {
         console.error('❌ Erreur Firestore:', firestoreError);
+        
+        // Log d'erreur
+        await db.collection('callback_logs').add({
+          timestamp: new Date(),
+          transactionId: transaction.id,
+          status: 'error',
+          message: firestoreError.message
+        });
+        
         return res.status(500).send('Erreur Firestore');
       }
     } else {
       console.log('⚠️ Transaction non approuvée, statut:', transaction.status);
+      
+      // Log de statut non approuvé
+      await db.collection('callback_logs').add({
+        timestamp: new Date(),
+        transactionId: transaction.id,
+        status: transaction.status,
+        message: 'Transaction non approuvée'
+      });
     }
     
     res.status(200).send('OK');
@@ -146,7 +180,8 @@ app.post('/api/payment-callback', async (req, res) => {
     res.status(500).send('Erreur interne du serveur');
   }
 
-   const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
+
+  const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
           // Implémentez l'envoi d'email avec un service comme SendGrid, Nodemailer, etc.
           console.log(`Email de confirmation envoyé à ${email}`);
         };
@@ -156,6 +191,8 @@ app.post('/api/payment-callback', async (req, res) => {
           `${transaction.customer?.firstname} ${transaction.customer?.lastname}`,
           articleTitle
         );
+
+
 });
 
 // Démarrer le serveur
