@@ -40,9 +40,9 @@ app.post('/api/create-payment', async (req, res) => {
   console.log('Reçue une demande de création de paiement:', req.body);
   
   try {
-    const { amount, description, customer, articleId } = req.body;
+    const { amount, description, customer, articleId, userId } = req.body;
     
-    const result = await createTransaction(amount, description, customer, articleId);
+    const result = await createTransaction(amount, description, customer, articleId, userId);
     
     if (result.success) {
       res.json({
@@ -73,23 +73,56 @@ app.post('/api/payment-callback', async (req, res) => {
     const { transaction } = req.body;
     
     if (transaction.status === 'approved') {
-      // Extraire l'ID de l'article depuis la référence
-      const articleId = transaction.reference;
-      const userId = transaction.customer.id; // Extraire l'ID utilisateur
+      // Récupérer les informations depuis les métadonnées
+      const { userId, articleId } = transaction.metadata;
       
-      if (articleId && userId) {
-        // Créer une entrée dans la collection ValidPay
-        await db.collection('ValidPay').add({
-          user_id: userId,
-          Id: articleId,
+      if (userId && articleId) {
+        // Créer un document dans la collection "ValidPay"
+        const validPayData = {
+          userId: userId,
+          articleId: articleId,
+          transactionId: transaction.id,
+          amount: transaction.amount, // Convertir de centimes
+          currency: 'XOF',
           paymentDate: new Date(),
-          paymentId: transaction.id,
-          paymentAmount: transaction.amount / 100,
           paymentMethod: transaction.mode || 'fedapay',
-          status: 'approved'
+          status: 'approved',
+          customerEmail: transaction.customer?.email || '',
+          customerName: `${transaction.customer?.firstname || ''} ${transaction.customer?.lastname || ''}`.trim(),
+          reference: transaction.reference,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+
+        const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
+  // Implémentez l'envoi d'email avec un service comme SendGrid, Nodemailer, etc.
+  console.log(`Email de confirmation envoyé à ${email}`);
+};
+
+await sendPaymentConfirmation(
+  transaction.customer?.email,
+  `${transaction.customer?.firstname} ${transaction.customer?.lastname}`,
+  articleTitle
+);
+        
+        // Ajouter le document à la collection "ValidPay"
+        const validPayRef = await db.collection('ValidPay').add(validPayData);
+        console.log(`Document ValidPay créé avec ID: ${validPayRef.id}`);
+        
+        // Mettre à jour le statut de paiement dans la collection "news"
+        await db.collection('news').doc(articleId).update({
+          paymentStatus: 'paid',
+          paymentId: transaction.id,
+          paymentDate: new Date(),
+          paymentAmount: transaction.amount,
+          paymentMethod: transaction.mode || 'fedapay',
+          validPayId: validPayRef.id
         });
         
-        console.log(`Paiement validé pour l'utilisateur ${userId} et l'article ${articleId}`);
+        console.log(`Article ${articleId} marqué comme payé et document ValidPay créé`);
+      } else {
+        console.error('userId ou articleId manquant dans les métadonnées de la transaction');
       }
     }
     
