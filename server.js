@@ -75,18 +75,21 @@ app.post('/api/payment-callback', async (req, res) => {
     if (transaction.status === 'approved') {
       // Extraire l'ID de l'article depuis la référence
       const articleId = transaction.reference;
+      const userId = transaction.customer.id; // Extraire l'ID utilisateur
       
-      if (articleId) {
-        // Mettre à jour le statut de paiement dans Firebase
-        await db.collection('news').doc(articleId).update({
-          paymentStatus: 'paid',
-          paymentId: transaction.id,
+      if (articleId && userId) {
+        // Créer une entrée dans la collection ValidPay
+        await db.collection('ValidPay').add({
+          user_id: userId,
+          Id: articleId,
           paymentDate: new Date(),
-          paymentAmount: transaction.amount / 100, // Convertir de centimes
-          paymentMethod: transaction.mode || 'fedapay'
+          paymentId: transaction.id,
+          paymentAmount: transaction.amount / 100,
+          paymentMethod: transaction.mode || 'fedapay',
+          status: 'approved'
         });
         
-        console.log(`Article ${articleId} marqué comme payé`);
+        console.log(`Paiement validé pour l'utilisateur ${userId} et l'article ${articleId}`);
       }
     }
     
