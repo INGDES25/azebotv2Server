@@ -2,15 +2,16 @@ const express = require('express');
 require('dotenv').config();
 const cors = require('cors');
 const { createTransaction } = require('./fedapayService');
-const { db } = require('./firebaseService'); // Ajout
+const { db } = require('./firebaseService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configuration CORS
+// Configuration CORS pour la production
 const allowedOrigins = [
-  'http://localhost:8080',
-  'http://192.168.1.101:8080'
+  'https://azebotv2-client.vercel.app',
+  'http://localhost:8080', // Pour le développement local
+  'http://192.168.1.101:8080' // Pour le développement local
 ];
 
 app.use(cors({
@@ -31,7 +32,7 @@ app.use(express.json());
 
 // Route de test
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'Backend opérationnel!' });
+  res.json({ message: 'Backend opérationnel en production!' });
 });
 
 // Route de création de paiement
@@ -99,5 +100,5 @@ app.post('/api/payment-callback', async (req, res) => {
 
 // Démarrer le serveur
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur http://localhost:${PORT}`);
+  console.log(`Serveur démarré sur le port ${PORT}`);
 });
