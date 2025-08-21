@@ -59,6 +59,37 @@ app.get('/api/test-callback', (req, res) => {
 });
 
 
+
+// Route pour vérifier le statut de paiement d'un article
+app.get('/api/article/:articleId/payment-status', async (req, res) => {
+  try {
+    const { articleId } = req.params;
+    
+    console.log('🔍 Vérification du statut de paiement pour l\'article:', articleId);
+    
+    const articleDoc = await db.collection('news').doc(articleId).get();
+    
+    if (!articleDoc.exists) {
+      console.log('❌ Article non trouvé:', articleId);
+      return res.status(404).json({ error: 'Article non trouvé' });
+    }
+    
+    const articleData = articleDoc.data();
+    console.log('📊 Statut actuel:', articleData.paymentStatus);
+    
+    res.json({
+      paymentStatus: articleData.paymentStatus || 'pending',
+      paymentDate: articleData.paymentDate,
+      paymentAmount: articleData.paymentAmount,
+      paymentMethod: articleData.paymentMethod
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération du statut de paiement:', error);
+    res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+
+
 // Route de création de paiement
 app.post('/api/create-payment', async (req, res) => {
   console.log('Reçue une demande de création de paiement:', req.body);
