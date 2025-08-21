@@ -24,10 +24,10 @@ const createTransaction = async (amount, description, customer, articleId, userI
       metadata: {
         userId: userId,
         articleId: articleId
-      },
+     },
       redirect_url: {
-        success: process.env.FEDAPAY_SUCCESS_URL,
-        cancel: process.env.FEDAPAY_CANCEL_URL
+        success: `${process.env.FEDAPAY_SUCCESS_URL}?article_id=${articleId}`,
+        cancel: `${process.env.FEDAPAY_CANCEL_URL}?article_id=${articleId}`
       }
     };
     
