@@ -20,7 +20,7 @@ app.use(cors({
       callback(null, true);
     } else {
       console.log('Origine non autorisée:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error('Not allowed by CORS'));    
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
