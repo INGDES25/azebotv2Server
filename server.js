@@ -97,7 +97,7 @@ app.post('/api/payment-callback', async (req, res) => {
           paymentStatus: 'paid',
           paymentId: transaction.id,
           paymentDate: new Date(),
-          paymentAmount: transaction.amount / 100,
+          paymentAmount: transaction.amount,
           paymentMethod: transaction.mode || 'fedapay'
         });
         
