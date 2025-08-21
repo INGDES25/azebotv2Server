@@ -61,7 +61,7 @@ app.get('/api/test-callback', (req, res) => {
 
 
 // Route pour vérifier le statut de paiement d'un article
-app.get('/api/article/:articleId/payment-status', async (req, res) => {
+app.get('/api/article/:articleId/payment-status', async (req, res) => { 
   try {
     const { articleId } = req.params;
     
