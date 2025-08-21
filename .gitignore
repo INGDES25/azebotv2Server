@@ -1,0 +1,3 @@
+# Fichiers ignorés par Git
+.env
+serviceAccountKey.json
