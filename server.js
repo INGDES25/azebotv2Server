@@ -50,6 +50,15 @@ app.get('/api/payment-callback', (req, res) => {
 });
 
 
+app.get('/api/test-callback', (req, res) => {
+  console.log('=== TEST CALLBACK REÇU ===');
+  console.log('Headers:', req.headers);
+  console.log('Query:', req.query);
+  console.log('Body:', req.body);
+  res.status(200).send('Test callback reçu');
+});
+
+
 // Route de création de paiement
 app.post('/api/create-payment', async (req, res) => {
   console.log('Reçue une demande de création de paiement:', req.body);
@@ -84,7 +93,9 @@ app.post('/api/create-payment', async (req, res) => {
 app.post('/api/payment-callback', async (req, res) => {
   try {
     console.log('=== CALLBACK FEDAPAY REÇU À', new Date().toISOString(), '===');
-    console.log('📋 Body:', JSON.stringify(req.body, null, 2));
+    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('📄 Body:', JSON.stringify(req.body, null, 2));
+    console.log('=== FIN CALLBACK ===');
     
     const { transaction } = req.body;
     
@@ -94,6 +105,7 @@ app.post('/api/payment-callback', async (req, res) => {
     }
     
     console.log('📊 Statut de la transaction:', transaction.status);
+    console.log('📝 Référence:', transaction.reference);
     
     if (transaction.status === 'approved') {
       console.log('✅ Transaction approuvée, mise à jour de l\'article...');
@@ -106,23 +118,57 @@ app.post('/api/payment-callback', async (req, res) => {
         return res.status(400).send('Article ID manquant');
       }
       
+      console.log('📝 Article ID à mettre à jour:', articleId);
+      
       try {
         // Mettre à jour le statut de paiement de l'article
-        await db.collection('news').doc(articleId).update({
+        const updateData = {
           paymentStatus: 'paid',
           paymentId: transaction.id,
           paymentDate: new Date(),
-          paymentAmount: transaction.amount,
+          paymentAmount: transaction.amount / 100,
           paymentMethod: transaction.mode || 'fedapay'
+        };
+        
+        console.log('💾 Données de mise à jour:', updateData);
+        
+        await db.collection('news').doc(articleId).update(updateData);
+        console.log(`✅ Article ${articleId} marqué comme payé`);
+        
+        // Log de succès
+        await db.collection('payment_logs').add({
+          timestamp: new Date(),
+          transactionId: transaction.id,
+          articleId: articleId,
+          status: 'success',
+          message: 'Paiement traité avec succès',
+          updateData: updateData
         });
         
-        console.log(`✅ Article ${articleId} marqué comme payé`);
       } catch (firestoreError) {
         console.error('❌ Erreur Firestore:', firestoreError);
+        
+        // Log d'erreur
+        await db.collection('payment_logs').add({
+          timestamp: new Date(),
+          transactionId: transaction.id,
+          articleId: articleId,
+          status: 'error',
+          message: firestoreError.message
+        });
+        
         return res.status(500).send('Erreur Firestore');
       }
     } else {
       console.log('⚠️ Transaction non approuvée, statut:', transaction.status);
+      
+      // Log de statut non approuvé
+      await db.collection('payment_logs').add({
+        timestamp: new Date(),
+        transactionId: transaction.id,
+        status: transaction.status,
+        message: 'Transaction non approuvée'
+      });
     }
     
     res.status(200).send('OK');
@@ -131,8 +177,7 @@ app.post('/api/payment-callback', async (req, res) => {
     res.status(500).send('Erreur interne du serveur');
   }
 
-
-  const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
+const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
           // Implémentez l'envoi d'email avec un service comme SendGrid, Nodemailer, etc.
           console.log(`Email de confirmation envoyé à ${email}`);
         };
@@ -142,8 +187,6 @@ app.post('/api/payment-callback', async (req, res) => {
           `${transaction.customer?.firstname} ${transaction.customer?.lastname}`,
           articleTitle
         );
-
-
 
 });
 
