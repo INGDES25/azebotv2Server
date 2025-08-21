@@ -128,19 +128,12 @@ app.post('/api/create-payment', async (req, res) => {
 app.post('/api/payment-callback', async (req, res) => {
   try {
     console.log('=== CALLBACK FEDAPAY REÇU À', new Date().toISOString(), '===');
-    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('📄 Body:', JSON.stringify(req.body, null, 2));
-    console.log('=== FIN CALLBACK ===');
-    
     const { transaction } = req.body;
     
     if (!transaction) {
       console.error('❌ Aucune transaction dans le callback');
       return res.status(400).send('Transaction manquante');
     }
-    
-    console.log('📊 Statut de la transaction:', transaction.status);
-    console.log('📝 Référence:', transaction.reference);
     
     if (transaction.status === 'approved') {
       console.log('✅ Transaction approuvée, mise à jour de l\'article...');
@@ -153,7 +146,14 @@ app.post('/api/payment-callback', async (req, res) => {
         return res.status(400).send('Article ID manquant');
       }
       
-      console.log('📝 Article ID à mettre à jour:', articleId);
+      // Récupérer l'ID de l'utilisateur depuis les métadonnées
+      const metadata = transaction.metadata || {};
+      const userId = metadata.userId;
+      
+      if (!userId) {
+        console.error('❌ userId manquant dans les métadonnées');
+        return res.status(400).send('User ID manquant');
+      }
       
       try {
         // Mettre à jour le statut de paiement de l'article
@@ -162,48 +162,18 @@ app.post('/api/payment-callback', async (req, res) => {
           paymentId: transaction.id,
           paymentDate: new Date(),
           paymentAmount: transaction.amount / 100,
-          paymentMethod: transaction.mode || 'fedapay'
+          paymentMethod: transaction.mode || 'fedapay',
+          paidBy: userId // Stocker l'ID de l'utilisateur qui a payé
         };
         
-        console.log('💾 Données de mise à jour:', updateData);
-        
         await db.collection('news').doc(articleId).update(updateData);
-        console.log(`✅ Article ${articleId} marqué comme payé`);
-        
-        // Log de succès
-        await db.collection('payment_logs').add({
-          timestamp: new Date(),
-          transactionId: transaction.id,
-          articleId: articleId,
-          status: 'success',
-          message: 'Paiement traité avec succès',
-          updateData: updateData
-        });
-        
+        console.log(`✅ Article ${articleId} marqué comme payé par l'utilisateur ${userId}`);
       } catch (firestoreError) {
         console.error('❌ Erreur Firestore:', firestoreError);
-        
-        // Log d'erreur
-        await db.collection('payment_logs').add({
-          timestamp: new Date(),
-          transactionId: transaction.id,
-          articleId: articleId,
-          status: 'error',
-          message: firestoreError.message
-        });
-        
         return res.status(500).send('Erreur Firestore');
       }
     } else {
       console.log('⚠️ Transaction non approuvée, statut:', transaction.status);
-      
-      // Log de statut non approuvé
-      await db.collection('payment_logs').add({
-        timestamp: new Date(),
-        transactionId: transaction.id,
-        status: transaction.status,
-        message: 'Transaction non approuvée'
-      });
     }
     
     res.status(200).send('OK');
@@ -211,8 +181,7 @@ app.post('/api/payment-callback', async (req, res) => {
     console.error('❌ Erreur lors du traitement du callback:', error);
     res.status(500).send('Erreur interne du serveur');
   }
-
-const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
+  const sendPaymentConfirmation = async (email, customerName, articleTitle) => {
           // Implémentez l'envoi d'email avec un service comme SendGrid, Nodemailer, etc.
           console.log(`Email de confirmation envoyé à ${email}`);
         };
