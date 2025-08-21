@@ -35,6 +35,21 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend opérationnel en production!' });
 });
 
+
+app.get('/api/payment-callback', (req, res) => {
+  // Récupérer le statut depuis les paramètres
+  const status = req.query.status || req.body?.transaction?.status;
+  
+  if (status === 'approved') {
+    // Rediriger vers la page de succès
+    res.redirect(process.env.FEDAPAY_SUCCESS_URL);
+  } else {
+    // Rediriger vers la page d'annulation
+    res.redirect(process.env.FEDAPAY_CANCEL_URL);
+  }
+});
+
+
 // Route de création de paiement
 app.post('/api/create-payment', async (req, res) => {
   console.log('Reçue une demande de création de paiement:', req.body);
