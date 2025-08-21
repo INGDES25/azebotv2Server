@@ -60,35 +60,39 @@ app.get('/api/test-callback', (req, res) => {
 
 
 
-// Route pour vérifier le statut de paiement d'un article
-app.get('/api/article/:articleId/payment-status', async (req, res) => { 
+// Route pour vérifier le statut d'une transaction FedaPay
+app.get('/api/transaction-status/:transactionId', async (req, res) => {
   try {
-    const { articleId } = req.params;
+    const { transactionId } = req.params;
     
-    console.log('🔍 Vérification du statut de paiement pour l\'article:', articleId);
+    console.log('🔍 Vérification du statut de la transaction:', transactionId);
     
-    const articleDoc = await db.collection('news').doc(articleId).get();
+    // URL de base selon l'environnement
+    const baseURL = process.env.FEDAPAY_ENVIRONMENT === 'live' 
+      ? 'https://api.fedapay.com' 
+      : 'https://sandbox-api.fedapay.com';
     
-    if (!articleDoc.exists) {
-      console.log('❌ Article non trouvé:', articleId);
-      return res.status(404).json({ error: 'Article non trouvé' });
-    }
+    const response = await axios.get(`${baseURL}/v1/transactions/${transactionId}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.FEDAPAY_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
-    const articleData = articleDoc.data();
-    console.log('📊 Statut actuel:', articleData.paymentStatus);
+    const transaction = response.data;
+    console.log('📊 Statut de la transaction:', transaction.status);
     
     res.json({
-      paymentStatus: articleData.paymentStatus || 'pending',
-      paymentDate: articleData.paymentDate,
-      paymentAmount: articleData.paymentAmount,
-      paymentMethod: articleData.paymentMethod
+      status: transaction.status,
+      amount: transaction.amount,
+      mode: transaction.mode,
+      reference: transaction.reference
     });
   } catch (error) {
-    console.error('❌ Erreur lors de la récupération du statut de paiement:', error);
-    res.status(500).json({ error: 'Erreur interne du serveur' });
+    console.error('❌ Erreur lors de la vérification du statut de la transaction:', error);
+    res.status(500).json({ error: 'Erreur lors de la vérification du statut de la transaction' });
   }
 });
-
 
 // Route de création de paiement
 app.post('/api/create-payment', async (req, res) => {
